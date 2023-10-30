@@ -85,7 +85,9 @@ class RiemannianOptimizer(NonTensorOptimizer):
                     lr /= t.sqrt(tt_grad.normsq())
 
                 for delta in param.deltas:
-                    delta.data -= lr * delta.grad
+                    delta.data.add_(-lr * delta.grad)
+                    # delta.add_(-lr * delta.grad)
+
                 param.reparameterize()
 
     @classmethod

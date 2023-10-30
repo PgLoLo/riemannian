@@ -184,14 +184,17 @@ def test_compare_with_SGD(ttm_params: TTMParams, normalize_grad: bool):
 
     assert_compare()
 
-    optimizer = RiemannianOptimizer.from_module(riemannian_linear, lr=1e-2, normalize_grad=normalize_grad)
-    simple_loss(riemannian_linear).backward()
-    optimizer.step()
+    riem = RiemannianOptimizer.from_module(riemannian_linear, lr=1e-2, normalize_grad=normalize_grad)
+    sgd = t.optim.SGD(linear.parameters(), 1e-2)
 
-    optimizer = t.optim.SGD(linear.parameters(), 1e-2)
-    simple_loss(linear).backward()
-    if normalize_grad:
-        linear.weight.grad /= t.sqrt((linear.weight.grad**2).sum())
-    optimizer.step()
+    for _ in range(3):
+        loss = simple_loss(riemannian_linear)
+        loss.backward()
+        riem.step()
+        sgd.zero_grad()
+        simple_loss(linear).backward()
+        if normalize_grad:
+            linear.weight.grad /= t.sqrt((linear.weight.grad**2).sum())
+        sgd.step()
 
-    assert_compare()
+        assert_compare()

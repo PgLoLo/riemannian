@@ -45,11 +45,11 @@ class RiemannianTTMCores(nn.Module):
         for i in range(tt.dim() - 1):
             tt.left_orthogonalize(i)
         for i, core in enumerate(tt.cores):
-            self.us[i] = core
+            self.us[i] = core.detach()
         for i in range(tt.dim() - 1, 0, -1):
             tt.right_orthogonalize(i)
         for i, core in enumerate(tt.cores):
-            self.vs[i] = core
+            self.vs[i] = core.detach()
         self.deltas = nn.ParameterList(
                 [nn.Parameter(tt.cores[0])]
                 + [
