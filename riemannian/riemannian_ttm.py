@@ -6,6 +6,8 @@ from torch import nn
 
 class RiemannianTTMCores(nn.Module):
     def __init__(self, ttm: TTMatrix, rank: int):
+        assert len(ttm.cores) > 1, 'One-core TTM is not supported'
+
         super().__init__()
 
         self.rank = rank
@@ -27,7 +29,7 @@ class RiemannianTTMCores(nn.Module):
     def output_dims(self) -> list[int]:
         return [dim[1] for dim in self.dims]
 
-    def cores(self) -> list[t.Tensor]:
+    def get_cores(self) -> list[t.Tensor]:
         cores = cores_from_deltas(self.us.to_list(), self.vs.to_list(), self.deltas)
         return [
             core.reshape(core.shape[0], inp_dim, out_dim, core.shape[-1])
@@ -58,7 +60,7 @@ class RiemannianTTMCores(nn.Module):
         )
 
     def ttmatrix(self) -> TTMatrix:
-        cores = self.cores()
+        cores = self.get_cores()
         ranks = [core.shape[2] for core in cores[:-1]]
         return TTMatrix(cores, ranks, self.input_dims, self.output_dims)
 

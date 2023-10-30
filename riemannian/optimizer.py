@@ -1,5 +1,8 @@
-import torch
+import torch as t
+import tntorch as tn
 from einops import einsum
+
+from riemannian.riemannian_ttm import RiemannianTTMCores, cores_from_deltas
 
 
 class NonTensorOptimizer:
@@ -28,7 +31,7 @@ class NonTensorOptimizer:
         assert isinstance(param_group, dict), "param group must be a dict"
 
         params = param_group['params']
-        if isinstance(params, torch.Tensor):
+        if isinstance(params, t.Tensor):
             param_group['params'] = [params]
         elif isinstance(params, set):
             raise TypeError('optimizer parameters need to be organized in ordered collections, but '
@@ -57,14 +60,16 @@ class NonTensorOptimizer:
 
 
 class RiemannianOptimizer(NonTensorOptimizer):
-    def __init__(self, params, lr: float):
-        super().__init__(params, {'lr': lr})
+    def __init__(self, params, lr: float, normalize_grad: bool = False):
+        super().__init__(params, {'lr': lr, 'normalize_grad': normalize_grad})
 
     def step(self, closure=None):
         assert closure is None, 'Not implemented'
 
         for group in self.param_groups:
             lr = group['lr']
+            normalize_grad = group['normalize_grad']
+
             for param in group['params']:
                 n_none_grads = sum(delta.grad is None for delta in param.deltas)
                 if n_none_grads == len(param.deltas):
@@ -74,6 +79,16 @@ class RiemannianOptimizer(NonTensorOptimizer):
                 for delta, u in zip(param.deltas[:-1], param.us):
                     delta.grad = delta.grad - einsum(delta.grad, u, u, 'r1 d r2, r1 d x, i j x  -> i j r2')
 
+                if normalize_grad:
+                    grad_cores = cores_from_deltas(param.us, param.vs, [delta.grad for delta in param.deltas])
+                    tt_grad = tn.Tensor(grad_cores)
+                    lr /= t.sqrt(tt_grad.normsq())
+
                 for delta in param.deltas:
                     delta.data -= lr * delta.grad
                 param.reparameterize()
+
+    @classmethod
+    def from_module(cls, module: t.nn.Module, lr: float, normalize_grad: bool = False):
+        submodules = [submodule for _, submodule in module.named_modules() if isinstance(submodule, RiemannianTTMCores)]
+        return cls(submodules, lr, normalize_grad)
